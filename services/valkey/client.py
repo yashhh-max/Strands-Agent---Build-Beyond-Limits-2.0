@@ -5,23 +5,33 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 class MockValkeyPipeline:
-    def __init__(self):
-        self.results = [0, 0, 0, 0]
+    def __init__(self, client):
+        self.client = client
+        self.commands = []
 
     def zremrangebyscore(self, *args, **kwargs):
+        self.commands.append(('zremrangebyscore', args, kwargs))
         return self
 
     def zcard(self, *args, **kwargs):
+        self.commands.append(('zcard', args, kwargs))
         return self
 
     def zadd(self, *args, **kwargs):
+        self.commands.append(('zadd', args, kwargs))
         return self
 
     def expire(self, *args, **kwargs):
+        self.commands.append(('expire', args, kwargs))
         return self
 
     def execute(self):
-        return self.results
+        results = []
+        for cmd, args, kwargs in self.commands:
+            func = getattr(self.client, cmd)
+            results.append(func(*args, **kwargs))
+        self.commands = []
+        return results
 
 class MockValkeyClient:
     """
@@ -117,8 +127,23 @@ class MockValkeyClient:
             return None
         return self._zsets[key].get(member)
 
+    def zcard(self, key):
+        if key not in self._zsets:
+            return 0
+        return len(self._zsets[key])
+
+    def zremrangebyscore(self, key, min_val, max_val):
+        if key not in self._zsets:
+            return 0
+        original_len = len(self._zsets[key])
+        self._zsets[key] = {
+            member: score for member, score in self._zsets[key].items()
+            if not (float(min_val) <= score <= float(max_val))
+        }
+        return original_len - len(self._zsets[key])
+
     def pipeline(self):
-        return MockValkeyPipeline()
+        return MockValkeyPipeline(self)
 
 class ValkeyClientManager:
     """

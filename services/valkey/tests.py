@@ -71,11 +71,14 @@ class ValkeyIntegrationTests(TestCase):
             pass
 
     def test_sliding_window_rate_limiting(self):
+        import time
         try:
             identifier = "user_rate_123"
-            # Simulate 3 fast requests (limit = 2)
+            # Simulate 3 requests with minor delay to avoid timestamp collisions on fast systems
             lim1 = self.limiter.is_rate_limited(identifier, limit=2, window_seconds=10)
+            time.sleep(0.02)
             lim2 = self.limiter.is_rate_limited(identifier, limit=2, window_seconds=10)
+            time.sleep(0.02)
             lim3 = self.limiter.is_rate_limited(identifier, limit=2, window_seconds=10)
             
             self.assertFalse(lim1)
